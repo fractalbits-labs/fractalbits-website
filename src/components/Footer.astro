@@ -1,0 +1,90 @@
+---
+const currentYear = new Date().getFullYear();
+
+const links = {
+  product: [
+    { label: 'Features', href: '/#features' },
+    { label: 'Benchmarks', href: '/#benchmarks' },
+    { label: 'Blog', href: '/blog' },
+  ],
+  resources: [
+    { label: 'Documentation', href: 'https://github.com/fractalbits-labs/fractalbits-main/tree/main/docs', external: true },
+    { label: 'Architecture', href: 'https://github.com/fractalbits-labs/fractalbits-main/blob/main/docs/internals/ARCHITECTURE.md', external: true },
+    { label: 'S3 API Compatibility', href: 'https://github.com/fractalbits-labs/fractalbits-main/blob/main/docs/S3_API_COMPATIBILITY.md', external: true },
+    { label: 'Roadmap', href: 'https://github.com/fractalbits-labs/fractalbits-main/blob/main/docs/ROADMAP.md', external: true },
+  ],
+  community: [
+    { label: 'GitHub', href: 'https://github.com/fractalbits-labs/fractalbits-main', external: true },
+    { label: 'Slack', href: 'https://join.slack.com/t/fractalbitscommunity/shared_invite/zt-3j9b3iw0l-NFSW3cjo~DEF~jqfBp1mzA', external: true },
+    { label: 'Discussions', href: 'https://github.com/fractalbits-labs/fractalbits-main/discussions', external: true },
+  ],
+};
+---
+
+<footer class="bg-gray-900 text-gray-300">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-8">
+      <!-- Brand -->
+      <div class="col-span-2 md:col-span-1">
+        <a href="/" class="text-xl font-bold text-white mb-4 block">FractalBits</a>
+        <p class="text-sm text-gray-400">
+          The ultimate S3 compatible high performance object storage in the AI era.
+        </p>
+      </div>
+
+      <!-- Product Links -->
+      <div>
+        <h3 class="text-sm font-semibold text-white uppercase tracking-wider mb-4">Product</h3>
+        <ul class="space-y-2">
+          {links.product.map(({ label, href }) => (
+            <li>
+              <a href={href} class="text-sm hover:text-white transition-colors">{label}</a>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <!-- Resources Links -->
+      <div>
+        <h3 class="text-sm font-semibold text-white uppercase tracking-wider mb-4">Resources</h3>
+        <ul class="space-y-2">
+          {links.resources.map(({ label, href, external }) => (
+            <li>
+              <a
+                href={href}
+                class="text-sm hover:text-white transition-colors"
+                {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+              >
+                {label}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <!-- Community Links -->
+      <div>
+        <h3 class="text-sm font-semibold text-white uppercase tracking-wider mb-4">Community</h3>
+        <ul class="space-y-2">
+          {links.community.map(({ label, href, external }) => (
+            <li>
+              <a
+                href={href}
+                class="text-sm hover:text-white transition-colors"
+                {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+              >
+                {label}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+
+    <div class="mt-12 pt-8 border-t border-gray-800">
+      <p class="text-sm text-gray-400">
+        &copy; {currentYear} FractalBits.
+      </p>
+    </div>
+  </div>
+</footer>

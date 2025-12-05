@@ -1,0 +1,127 @@
+---
+title: "Why We Built Another Object Storage (And Why It's Different)"
+description: "High-performance object storage exists, but the economics make it unusable at scale. FractalBits breaks out of the high-performance trap."
+pubDate: 2025-12-04
+author: "FractalBits Team"
+tags: ["announcement", "architecture", "performance"]
+---
+
+## A Crowded Market, But An Unsolved Problem
+
+Object storage is the backbone of modern data infrastructure. AWS S3, Google Cloud Storage, MinIO, Ceph, newer players like Tigris Data—the market is saturated. So why build another one?
+
+Because the fundamental assumptions behind these systems are shifting. High performance is no longer optional—but having high performance available isn't the same as being able to afford using it.
+
+## Beyond "Cold Storage": Why Performance Matters Now
+
+Traditional object storage had a clear priority order: cost first, performance later. This worked fine for archiving backups and storing large, rarely accessed files.
+
+But today, object storage is increasingly the primary data layer for AI, analytics, and cloud-native applications. Latency directly translates to compute costs—stalled GPUs waiting on I/O are expensive GPUs doing nothing.
+
+High-performance object storage exists now. S3 Express One Zone, for example, delivers single-digit millisecond latency. But there's a catch: the per-request pricing makes it prohibitively expensive to actually *use* at high IOPS. As one analysis put it, it's "the right technology, at the right time with the wrong price" [1]. You have the performance on paper, but you can't afford to run your workload at full speed. That's the high-performance trap.
+
+## The New Challenge: AI and Analytical Workloads
+
+Modern workloads, especially in AI, impose demands that strain traditional designs:
+
+**Small Objects at Scale**: AI training datasets often consist of millions of small files (images, text snippets, feature vectors). A study of typical AI training workloads found over 60% of objects are 512KB or smaller [2]. This shifts the bottleneck from bandwidth to metadata performance.
+
+**Latency Sensitivity**: Training loops and inference pipelines are bottlenecked by I/O. When fetching thousands of small objects per batch, per-object latency compounds quickly, stalling expensive GPUs.
+
+**The Need for Directories**: S3's flat namespace is a mismatch for many workflows. Data scientists expect atomic renames and efficient directory listings—operations that are either slow or missing in classic object stores.
+
+## Where Current Solutions Hit a Wall
+
+Existing systems struggle with these patterns in predictable ways:
+
+**The High-Performance Trap**: High-performance tiers like S3 Express One Zone solve the latency problem, but the per-request cost means you can't actually use that performance at scale. At 10K PUT/s, you're looking at ~$29K/month in request fees alone. The performance is there; the economics aren't.
+
+**The Small Object Tax**: With cloud object storage, you pay per request. Storing billions of 4KB objects means your API request costs can exceed your storage costs. The more objects you have, the worse it gets.
+
+**Missing Directory Semantics**: The lack of atomic rename forces complex workarounds in applications, limiting what you can build directly on object storage. Most systems with rename support rely on inode-like structures that struggle with scalability and performance—adding to the per-IOPS cost burden.
+
+## Introducing FractalBits
+
+We built FractalBits to break out of the high-performance trap: delivering performance you can actually afford to use at scale. In our benchmarks, we achieved nearly 1M GET/s on 4KB objects with a cluster totaling 64 cores across all data and metadata nodes.
+
+Our focus:
+
+1. High IOPS at a cost that makes sense—so you can actually run your workload at full speed.
+2. Native directory semantics, including atomic rename.
+3. Strong consistency—no eventual consistency surprises.
+
+**The Cost Difference**
+
+Here's what the gap looks like for a small-object intensive workload (4KB objects, 10K IOPS):
+
+| Metric                     | S3 Express One Zone | FractalBits   | Reduction |
+| -------------------------- | ------------------- | ------------- | --------- |
+| Monthly Cost for 10K PUT/s | ~$29,290            | ~$166         | ~150×     |
+| Monthly Cost for 10K GET/s | ~$778               | ~$42          | ~15×      |
+| Storage (1 TB Per Month)   | ~$110               | $0 (included) | —         |
+
+*S3 costs based on public pricing ($0.00113/1K PUTs, $0.00003/1K GETs, $0.11/GB/Month). FractalBits estimated using 1-year reserved instance pricing for required compute (e.g., i8g.2xlarge for data, m7g.4xlarge for metadata). Your savings will vary based on workload, but the magnitude is indicative.*
+
+## The Key: Our Metadata Engine
+
+At our core is a metadata engine built on an on-disk radix tree, optimized for path-like keys.
+
+Most object stores use LSM-trees (good for writes, variable read latency) or B+ trees (predictable reads, write amplification). We chose a radix tree because it naturally mirrors a filesystem hierarchy:
+
+**Prefix Sharing**: Common path segments (e.g., `/datasets/cifar10/`) are stored once, saving memory and speeding up traversal.
+
+**Efficient Directory Operations**: Listing a directory becomes a subtree scan. Atomic rename is essentially updating a pointer at the branch point, not copying data.
+
+**Crash Consistency**: We use physiological logging to ensure metadata integrity and fast recovery.
+
+Unlike most systems that use inode-based (or inode-like) structures to support directory features, we use a full-path approach for better scalability and performance.
+
+By the way, we implemented the core engine in Zig for control and predictable performance.<br/>
+Why Zig?
+- `comptime` metaprogramming generates optimized code paths for different node types at compile time
+- Manual memory management means no GC pauses and predictable latency
+- Direct SIMD access for parallel key comparisons within tree nodes
+- io_uring in std library, so that we can easily try more recent io_uring kernel features (registered buffers, nvme IOPoll etc).
+
+## The Gateway: Rust-Based S3-Compatible API server
+
+Our S3-compatible API server, built in Rust, manages the data path:
+
+**Safety & Concurrency**: Rust's ownership model gives us thread safety without a garbage collector—important for high-concurrency request handling.
+
+**Async I/O**: Built on Tokio for handling thousands of concurrent connections.
+
+**Production-Ready Frameworks**: We support both axum and actix-web, defaulting to actix-web. Its thread-per-core architecture aligns with our design for maximum performance.
+
+## The Model: Bring Your Own Cloud (BYOC)
+
+FractalBits deploys as a managed software layer within your own cloud account (currently AWS only).
+
+**For you:**
+
+- Cost transparency—you pay the cloud provider's raw costs for VMs and disks, no egress fees to us
+- Data sovereignty—your data never leaves your cloud tenant
+- Low latency—deploy in the same region/VPC as your compute
+
+**For us:** We leverage the cloud's proven infrastructure instead of building it from scratch, letting us focus on the storage engine itself.
+
+## Looking Ahead
+
+The object storage market has high-performance options, but the economics often make that performance unusable at scale. And systems that do offer directory semantics often struggle with performance or scalability. Getting both at a reasonable cost is still rare. We think there's room for a different approach.
+
+FractalBits is our answer. We're early in this journey and learning from users who are pushing these limits.
+
+---
+
+Hitting the performance or cost wall with your current object storage? We'd be interested to hear about your use case.
+
+[GitHub](https://github.com/fractalbits-labs/fractalbits-main)
+
+---
+
+**References:**
+
+[1]. S3 Express One Zone, Not Quite What I Hoped For, https://jack-vanlightly.com/blog/2023/11/29/s3-express-one-zone-not-quite-what-i-hoped-for
+
+[2]. Mantle: Efficient Hierarchical Metadata Management for Cloud Object Storage Services. SOSP 2025.
+

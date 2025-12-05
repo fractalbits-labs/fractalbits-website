@@ -1,0 +1,238 @@
+---
+
+---
+
+<section class="relative overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 min-h-[90vh] flex items-center">
+  <!-- Animated Fractal Canopy Background -->
+  <canvas id="fractal-canvas" class="absolute inset-0 w-full h-full"></canvas>
+
+  <!-- Gradient Overlay -->
+  <div class="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-slate-900/50"></div>
+
+  <div class="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24 md:py-32">
+    <div class="text-center">
+      <h1 class="text-4xl md:text-6xl font-bold text-white mb-6">
+        The ultimate
+        <span class="bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent"> S3 compatible</span>
+        <br />high performance object storage
+      </h1>
+
+      <p class="max-w-2xl mx-auto text-xl text-slate-300 mb-8">
+        Up to <strong class="text-white">1 million IOPS</strong> with p99 latency ~5ms.
+        Native <strong class="text-white">atomic rename</strong> support.
+        Deploy to any AWS region in <strong class="text-white">5 minutes</strong>.
+      </p>
+
+      <!-- Stats -->
+      <div class="flex flex-wrap justify-center gap-8 mb-10">
+        <div class="text-center">
+          <div class="text-3xl font-bold text-cyan-400">~1M</div>
+          <div class="text-sm text-slate-400">IOPS (4KB)</div>
+        </div>
+        <div class="text-center">
+          <div class="text-3xl font-bold text-cyan-400">~5ms</div>
+          <div class="text-sm text-slate-400">p99 Latency</div>
+        </div>
+      </div>
+
+      <!-- CTA Buttons -->
+      <div class="flex flex-wrap justify-center gap-4">
+        <a
+          href="https://github.com/fractalbits-labs/fractalbits-main"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-lg text-slate-900 bg-gradient-to-r from-cyan-400 to-blue-400 hover:from-cyan-300 hover:to-blue-300 transition-all duration-200 shadow-lg shadow-cyan-500/25"
+        >
+          <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+          </svg>
+          Get Started
+        </a>
+        <a
+          href="https://github.com/fractalbits-labs/fractalbits-main/tree/main/docs"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="inline-flex items-center px-6 py-3 border border-slate-500 text-base font-medium rounded-lg text-white hover:bg-slate-800 transition-all duration-200"
+        >
+          View Documentation
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Glowing orbs in background -->
+  <div class="absolute inset-0 -z-10 overflow-hidden pointer-events-none">
+    <div class="absolute top-1/4 right-1/4 w-96 h-96 bg-blue-500 rounded-full blur-[128px] opacity-20"></div>
+    <div class="absolute bottom-1/4 left-1/4 w-96 h-96 bg-cyan-500 rounded-full blur-[128px] opacity-20"></div>
+  </div>
+</section>
+
+<script>
+  const canvas = document.getElementById('fractal-canvas') as HTMLCanvasElement;
+  const ctx = canvas.getContext('2d');
+
+  interface Star {
+    x: number;
+    y: number;
+    radius: number;
+    brightness: number;
+    twinkleSpeed: number;
+    twinkleOffset: number;
+    hue: number;
+    group: number;
+  }
+
+  interface StarGroup {
+    centerX: number;
+    centerY: number;
+    radius: number;
+    hue: number;
+    brightness: number;
+    starCount: number;
+  }
+
+  let stars: Star[] = [];
+  let animationId: number;
+
+  function resize() {
+    canvas.width = canvas.offsetWidth;
+    canvas.height = canvas.offsetHeight;
+    createStars();
+  }
+
+  function createStars() {
+    stars = [];
+
+    // Reduce star groups on mobile devices for better performance
+    const isMobile = canvas.width < 768;
+    const baseGroups = isMobile ? 5 : 12;
+    const randomGroups = isMobile ? 3 : 6;
+    const baseStarsPerGroup = isMobile ? 15 : 30;
+    const randomStarsPerGroup = isMobile ? 20 : 50;
+    const backgroundStarCount = isMobile ? 80 : 200;
+
+    // Create star groups (clusters/nebulae)
+    const numGroups = baseGroups + Math.floor(Math.random() * randomGroups);
+    const groups: StarGroup[] = [];
+
+    for (let g = 0; g < numGroups; g++) {
+      // Spread groups toward edges using inverse distribution
+      // Use squared random to bias toward 0 and 1 (edges)
+      const rx = Math.random();
+      const ry = Math.random();
+      const edgeBiasX = rx < 0.5 ? rx * rx * 2 : 1 - (1 - rx) * (1 - rx) * 2;
+      const edgeBiasY = ry < 0.5 ? ry * ry * 2 : 1 - (1 - ry) * (1 - ry) * 2;
+
+      groups.push({
+        centerX: edgeBiasX * canvas.width,
+        centerY: edgeBiasY * canvas.height,
+        radius: 80 + Math.random() * 150,
+        hue: 180 + Math.random() * 80, // cyan to purple range
+        brightness: 0.5 + Math.random() * 0.5,
+        starCount: baseStarsPerGroup + Math.floor(Math.random() * randomStarsPerGroup),
+      });
+    }
+
+    // Create stars within each group
+    groups.forEach((group, groupIndex) => {
+      for (let i = 0; i < group.starCount; i++) {
+        // Gaussian-like distribution within group
+        const angle = Math.random() * Math.PI * 2;
+        const dist = Math.random() * Math.random() * group.radius; // Cluster toward center
+
+        stars.push({
+          x: group.centerX + Math.cos(angle) * dist,
+          y: group.centerY + Math.sin(angle) * dist,
+          radius: 0.5 + Math.random() * 2,
+          brightness: group.brightness * (0.3 + Math.random() * 0.7),
+          twinkleSpeed: 1 + Math.random() * 3,
+          twinkleOffset: Math.random() * Math.PI * 2,
+          hue: group.hue + (Math.random() - 0.5) * 30,
+          group: groupIndex,
+        });
+      }
+    });
+
+    // Add scattered background stars
+    for (let i = 0; i < backgroundStarCount; i++) {
+      stars.push({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        radius: 0.3 + Math.random() * 1,
+        brightness: 0.2 + Math.random() * 0.4,
+        twinkleSpeed: 0.5 + Math.random() * 2,
+        twinkleOffset: Math.random() * Math.PI * 2,
+        hue: 180 + Math.random() * 60,
+        group: -1,
+      });
+    }
+  }
+
+  function draw() {
+    if (!ctx) return;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    const time = Date.now() * 0.001;
+
+    for (const star of stars) {
+      // Twinkle effect
+      const twinkle = Math.sin(time * star.twinkleSpeed + star.twinkleOffset) * 0.4 + 0.6;
+      const currentBrightness = star.brightness * twinkle;
+
+      // Draw star glow (larger, softer)
+      const glowRadius = star.radius * (3 + star.brightness * 2);
+      const gradient = ctx.createRadialGradient(
+        star.x, star.y, 0,
+        star.x, star.y, glowRadius
+      );
+      gradient.addColorStop(0, `hsla(${star.hue}, 70%, 85%, ${currentBrightness * 0.8})`);
+      gradient.addColorStop(0.3, `hsla(${star.hue}, 60%, 70%, ${currentBrightness * 0.4})`);
+      gradient.addColorStop(0.6, `hsla(${star.hue}, 50%, 60%, ${currentBrightness * 0.15})`);
+      gradient.addColorStop(1, `hsla(${star.hue}, 40%, 50%, 0)`);
+
+      ctx.beginPath();
+      ctx.arc(star.x, star.y, glowRadius, 0, Math.PI * 2);
+      ctx.fillStyle = gradient;
+      ctx.fill();
+
+      // Draw star core (bright center)
+      ctx.beginPath();
+      ctx.arc(star.x, star.y, star.radius * 0.8, 0, Math.PI * 2);
+      ctx.fillStyle = `hsla(${star.hue + 20}, 100%, 95%, ${currentBrightness})`;
+      ctx.fill();
+
+      // Add cross sparkle for brighter stars
+      if (star.brightness > 0.6) {
+        const sparkleSize = star.radius * 4 * currentBrightness;
+        ctx.strokeStyle = `hsla(${star.hue + 10}, 80%, 90%, ${currentBrightness * 0.5})`;
+        ctx.lineWidth = 0.5;
+
+        ctx.beginPath();
+        ctx.moveTo(star.x - sparkleSize, star.y);
+        ctx.lineTo(star.x + sparkleSize, star.y);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(star.x, star.y - sparkleSize);
+        ctx.lineTo(star.x, star.y + sparkleSize);
+        ctx.stroke();
+      }
+    }
+
+    animationId = requestAnimationFrame(draw);
+  }
+
+  function init() {
+    resize();
+    draw();
+  }
+
+  window.addEventListener('resize', () => {
+    cancelAnimationFrame(animationId);
+    resize();
+    draw();
+  });
+
+  init();
+</script>
