@@ -1,0 +1,102 @@
+---
+const getMetrics = [
+  { label: 'IOPS', value: '982,552' },
+  { label: 'Throughput', value: '3,838 MiB/s' },
+  { label: 'Avg Latency', value: '2.9 ms' },
+  { label: 'P99 Latency', value: '5.3 ms' },
+];
+
+const putMetrics = [
+  { label: 'IOPS', value: '248,545 obj/s' },
+  { label: 'Throughput', value: '971 MiB/s' },
+  { label: 'Avg Latency', value: '6.6 ms' },
+];
+
+const config = [
+  { label: 'Object Size', value: '4 KiB' },
+  { label: 'API Servers', value: '14x c8g.xlarge' },
+  { label: 'BSS Nodes', value: '6x i8g.2xlarge' },
+  { label: 'NSS Node', value: '1x m7gd.4xlarge' },
+  { label: 'Region', value: 'us-west-2' },
+  { label: 'Replication', value: '3-way data, 6-way metadata' },
+];
+---
+
+<section id="benchmarks" class="py-24 bg-gray-50">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="text-center mb-16">
+      <h2 class="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
+        Performance Benchmarks
+      </h2>
+      <p class="max-w-2xl mx-auto text-lg text-gray-600">
+        Real-world performance metrics from our production-ready deployment.
+        Verify these results yourself with our BYOC deployment.
+      </p>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-8 mb-12">
+      <!-- GET Workload -->
+      <div class="bg-white rounded-2xl p-8 shadow-sm">
+        <h3 class="text-xl font-semibold text-gray-900 mb-6 flex items-center">
+          <span class="w-3 h-3 bg-green-500 rounded-full mr-3"></span>
+          GET Workload
+        </h3>
+        <div class="space-y-4">
+          {getMetrics.map(({ label, value }) => (
+            <div class="flex justify-between items-center py-2 border-b border-gray-100 last:border-0">
+              <span class="text-gray-600">{label}</span>
+              <span class="font-mono font-semibold text-gray-900">{value}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <!-- PUT Workload -->
+      <div class="bg-white rounded-2xl p-8 shadow-sm">
+        <h3 class="text-xl font-semibold text-gray-900 mb-6 flex items-center">
+          <span class="w-3 h-3 bg-blue-500 rounded-full mr-3"></span>
+          PUT Workload
+        </h3>
+        <div class="space-y-4">
+          {putMetrics.map(({ label, value }) => (
+            <div class="flex justify-between items-center py-2 border-b border-gray-100 last:border-0">
+              <span class="text-gray-600">{label}</span>
+              <span class="font-mono font-semibold text-gray-900">{value}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+
+    <!-- Benchmark Config -->
+    <div class="bg-white rounded-2xl p-8 shadow-sm">
+      <h3 class="text-lg font-semibold text-gray-900 mb-4">Benchmark Configuration</h3>
+      <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        {config.map(({ label, value }) => (
+          <div class="text-center">
+            <div class="text-sm text-gray-500 mb-1">{label}</div>
+            <div class="font-medium text-gray-900">{value}</div>
+          </div>
+        ))}
+      </div>
+      <p class="text-sm text-gray-500 mt-4">
+        Cost: ~$8/hour based on AWS on-demand EC2 instance pricing
+      </p>
+    </div>
+
+    <!-- CTA -->
+    <div class="mt-12 text-center">
+      <a
+        href="https://github.com/fractalbits-labs/fractalbits-main#bring-your-own-cloud-byoc"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="inline-flex items-center text-primary-600 hover:text-primary-700 font-medium"
+      >
+        Run your own benchmarks with BYOC
+        <svg class="w-5 h-5 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" />
+        </svg>
+      </a>
+    </div>
+  </div>
+</section>
