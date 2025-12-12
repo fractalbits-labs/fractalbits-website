@@ -1,5 +1,5 @@
 ---
-import { useTranslations, getLocalizedPath, getAlternateLanguagePath, languages, defaultLang } from '../i18n';
+import { useTranslations, getLocalizedPath, defaultLang } from '../i18n';
 import type { Lang } from '../i18n';
 
 interface Props {
@@ -17,8 +17,6 @@ const navLinks = [
 ];
 
 const currentPath = Astro.url.pathname;
-const otherLang = lang === 'en' ? 'zh' : 'en';
-const switchPath = getAlternateLanguagePath(currentPath, lang, otherLang);
 ---
 
 <header class="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-200">
@@ -48,12 +46,6 @@ const switchPath = getAlternateLanguagePath(currentPath, lang, otherLang);
             )}
           </a>
         ))}
-        <a
-          href={switchPath}
-          class="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors px-2 py-1 border border-gray-300 rounded-md hover:bg-gray-50"
-        >
-          {languages[otherLang]}
-        </a>
       </div>
 
       <!-- Mobile Menu Button -->
@@ -82,12 +74,6 @@ const switchPath = getAlternateLanguagePath(currentPath, lang, otherLang);
           {label}
         </a>
       ))}
-      <a
-        href={switchPath}
-        class="block py-2 text-base font-medium text-gray-600 hover:text-gray-900 transition-colors"
-      >
-        {languages[otherLang]}
-      </a>
     </div>
   </nav>
 </header>
