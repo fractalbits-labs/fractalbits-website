@@ -1,20 +1,32 @@
 ---
+import { useTranslations, getLocalizedPath, getAlternateLanguagePath, languages, defaultLang } from '../i18n';
+import type { Lang } from '../i18n';
+
+interface Props {
+  lang?: Lang;
+}
+
+const { lang = defaultLang } = Astro.props;
+const t = useTranslations(lang);
+
 const navLinks = [
-  { href: '/', label: 'Home' },
-  { href: '/blog', label: 'Blog' },
-  { href: 'https://github.com/fractalbits-labs/fractalbits-main/tree/main/docs', label: 'Docs', external: true },
-  { href: 'https://github.com/fractalbits-labs/fractalbits-main', label: 'GitHub', external: true },
+  { href: getLocalizedPath('/', lang), label: t('nav.home'), key: '/' },
+  { href: getLocalizedPath('/blog', lang), label: t('nav.blog'), key: '/blog' },
+  { href: 'https://github.com/fractalbits-labs/fractalbits-main/tree/main/docs', label: t('nav.docs'), external: true },
+  { href: 'https://github.com/fractalbits-labs/fractalbits-main', label: t('nav.github'), external: true },
 ];
 
 const currentPath = Astro.url.pathname;
+const otherLang = lang === 'en' ? 'zh' : 'en';
+const switchPath = getAlternateLanguagePath(currentPath, lang, otherLang);
 ---
 
 <header class="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-200">
   <nav class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
     <div class="flex justify-between items-center h-20">
-      <a href="/" class="inline-flex items-center gap-2 py-2">
-        <img src="/logo-icon.png" alt="FractalBits" class="h-8 w-auto" />
-        <span class="text-xl font-bold text-primary-600">FractalBits</span>
+      <a href={getLocalizedPath('/', lang)} class="inline-flex items-center gap-2 py-2">
+        <img src="/logo-icon.png" alt={t('site.brand')} class="h-8 w-auto" />
+        <span class="text-xl font-bold text-primary-600">{t('site.brand')}</span>
       </a>
 
       <!-- Desktop Nav -->
@@ -36,6 +48,12 @@ const currentPath = Astro.url.pathname;
             )}
           </a>
         ))}
+        <a
+          href={switchPath}
+          class="text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors px-2 py-1 border border-gray-300 rounded-md hover:bg-gray-50"
+        >
+          {languages[otherLang]}
+        </a>
       </div>
 
       <!-- Mobile Menu Button -->
@@ -64,6 +82,12 @@ const currentPath = Astro.url.pathname;
           {label}
         </a>
       ))}
+      <a
+        href={switchPath}
+        class="block py-2 text-base font-medium text-gray-600 hover:text-gray-900 transition-colors"
+      >
+        {languages[otherLang]}
+      </a>
     </div>
   </nav>
 </header>

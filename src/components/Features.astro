@@ -1,23 +1,33 @@
 ---
+import { useTranslations, defaultLang } from '../i18n';
+import type { Lang } from '../i18n';
+
+interface Props {
+  lang?: Lang;
+}
+
+const { lang = defaultLang } = Astro.props;
+const t = useTranslations(lang);
+
 const features = [
   {
-    title: '~1M IOPS',
-    description: 'Achieve up to 1 million 4K read IOPS with p99 latency around 5ms. Built for demanding workloads like AI training and data analytics.',
+    title: t('features.iops.title'),
+    description: t('features.iops.description'),
     icon: 'rocket',
   },
   {
-    title: 'Atomic Rename',
-    description: 'Native atomic rename support for both objects and directories. A capability standard S3 lacks, essential for managing datasets and checkpoints.',
+    title: t('features.atomic.title'),
+    description: t('features.atomic.description'),
     icon: 'refresh',
   },
   {
-    title: 'Two-Tier Storage',
-    description: 'NVMe SSD tier for hot small objects with single-digit millisecond latency, S3 backend tier for larger objects to optimize costs.',
+    title: t('features.storage.title'),
+    description: t('features.storage.description'),
     icon: 'database',
   },
   {
-    title: '5-Minute BYOC',
-    description: 'Deploy to any AWS region with a single command. Bring Your Own Cloud deployment gets you running in under 5 minutes.',
+    title: t('features.byoc.title'),
+    description: t('features.byoc.description'),
     icon: 'cloud',
   },
 ];
@@ -34,11 +44,10 @@ const icons: Record<string, string> = {
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
     <div class="text-center mb-16">
       <h2 class="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
-        Built for Performance
+        {t('features.title')}
       </h2>
       <p class="max-w-2xl mx-auto text-lg text-gray-600">
-        FractalBits combines cutting-edge technologies to deliver exceptional performance
-        that exceeds AWS S3 Express One Zone, with much lower cost.
+        {t('features.description')}
       </p>
     </div>
 
@@ -56,23 +65,23 @@ const icons: Record<string, string> = {
 
     <!-- Tech Stack -->
     <div class="mt-16 text-center">
-      <p class="text-sm text-gray-500 mb-4">Powered by</p>
+      <p class="text-sm text-gray-500 mb-4">{t('features.powered')}</p>
       <div class="flex justify-center items-center gap-8 flex-wrap">
         <div class="flex items-center gap-2 text-gray-700">
-          <span class="font-semibold">Rust</span>
-          <span class="text-gray-400">API Gateway</span>
+          <span class="font-semibold">{t('features.rust')}</span>
+          <span class="text-gray-400">{t('features.rust.desc')}</span>
         </div>
         <div class="flex items-center gap-2 text-gray-700">
-          <span class="font-semibold">Zig</span>
-          <span class="text-gray-400">Data Plane</span>
+          <span class="font-semibold">{t('features.zig')}</span>
+          <span class="text-gray-400">{t('features.zig.desc')}</span>
         </div>
         <div class="flex items-center gap-2 text-gray-700">
-          <span class="font-semibold">io_uring</span>
-          <span class="text-gray-400">Async I/O</span>
+          <span class="font-semibold">{t('features.iouring')}</span>
+          <span class="text-gray-400">{t('features.iouring.desc')}</span>
         </div>
         <div class="flex items-center gap-2 text-gray-700">
-          <span class="font-semibold">Fractal ART</span>
-          <span class="text-gray-400">Metadata Engine</span>
+          <span class="font-semibold">{t('features.art')}</span>
+          <span class="text-gray-400">{t('features.art.desc')}</span>
         </div>
       </div>
     </div>

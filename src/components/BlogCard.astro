@@ -1,15 +1,21 @@
 ---
+import { useTranslations, getLocalizedPath, defaultLang } from '../i18n';
+import type { Lang } from '../i18n';
+
 interface Props {
   title: string;
   description: string;
   pubDate: Date;
   slug: string;
   tags?: string[];
+  lang?: Lang;
 }
 
-const { title, description, pubDate, slug, tags } = Astro.props;
+const { title, description, pubDate, slug, tags, lang = defaultLang } = Astro.props;
+const t = useTranslations(lang);
 
-const formattedDate = pubDate.toLocaleDateString('en-US', {
+const dateLocale = lang === 'zh' ? 'zh-CN' : 'en-US';
+const formattedDate = pubDate.toLocaleDateString(dateLocale, {
   year: 'numeric',
   month: 'short',
   day: 'numeric'
@@ -17,7 +23,7 @@ const formattedDate = pubDate.toLocaleDateString('en-US', {
 ---
 
 <article class="group">
-  <a href={`/blog/${slug}`} class="block p-6 bg-white rounded-2xl border border-gray-200 hover:border-primary-300 hover:shadow-lg transition-all duration-300">
+  <a href={getLocalizedPath(`/blog/${slug}`, lang)} class="block p-6 bg-white rounded-2xl border border-gray-200 hover:border-primary-300 hover:shadow-lg transition-all duration-300">
     <div class="flex items-center gap-2 text-sm text-gray-500 mb-3">
       <time datetime={pubDate.toISOString()}>{formattedDate}</time>
       {tags && tags.length > 0 && (
@@ -34,7 +40,7 @@ const formattedDate = pubDate.toLocaleDateString('en-US', {
       {description}
     </p>
     <div class="mt-4 text-primary-600 font-medium flex items-center">
-      Read more
+      {t('blog.readMore')}
       <svg class="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
       </svg>

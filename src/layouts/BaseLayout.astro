@@ -2,24 +2,31 @@
 import Header from '../components/Header.astro';
 import Footer from '../components/Footer.astro';
 import '../styles/global.css';
+import { useTranslations, defaultLang } from '../i18n';
+import type { Lang } from '../i18n';
 
 interface Props {
   title: string;
   description?: string;
   image?: string;
+  lang?: Lang;
 }
+
+const { lang = defaultLang } = Astro.props;
+const t = useTranslations(lang);
 
 const {
   title,
-  description = 'High-Performance S3-Compatible Object Storage. Up to 1M IOPS with p99 latency ~5ms.',
+  description = t('site.description'),
   image = '/logo.png'
 } = Astro.props;
 
 const canonicalURL = new URL(Astro.url.pathname, Astro.site);
+const htmlLang = lang === 'zh' ? 'zh-CN' : 'en';
 ---
 
 <!DOCTYPE html>
-<html lang="en">
+<html lang={htmlLang}>
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -46,10 +53,10 @@ const canonicalURL = new URL(Astro.url.pathname, Astro.site);
     <meta name="twitter:image" content={new URL(image, Astro.site)} />
   </head>
   <body class="min-h-screen flex flex-col">
-    <Header />
+    <Header lang={lang} />
     <main class="flex-grow">
       <slot />
     </main>
-    <Footer />
+    <Footer lang={lang} />
   </body>
 </html>
