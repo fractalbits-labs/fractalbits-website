@@ -30,6 +30,14 @@ Modern workloads, especially in AI, impose demands that strain traditional desig
 
 **The Need for Directories**: S3's flat namespace is a mismatch for many workflows. Data scientists expect atomic renames and efficient directory listings—operations that are either slow or missing in classic object stores.
 
+### "Why Not Just Use a Filesystem?"
+
+A reasonable question: if you want directories and atomic rename, why not just use a filesystem like AWS EFS? Object stores and filesystems are different concepts—why blur the line?
+
+The answer is that the line is *already* blurring, driven by real workload demands. AWS themselves recognized this when they introduced S3 Express One Zone with explicit "directory bucket" semantics and atomic rename support (currently single-object) [3]. Google Cloud has made similar moves toward hierarchical namespace support [4]. The industry is converging on this because the clean separation between "object storage for scale" and "filesystem for semantics" doesn't match how modern applications actually work.
+
+We're not trying to build a POSIX filesystem. But the subset of filesystem semantics that matter for data workflows—efficient directory listings, atomic rename for safe data handoffs—these belong in object storage. The alternative is forcing every application to build fragile workarounds on top of a flat namespace.
+
 ## Where Current Solutions Hit a Wall
 
 Existing systems struggle with these patterns in predictable ways:
@@ -124,4 +132,8 @@ Hitting the performance or cost wall with your current object storage? We'd be i
 [1]. S3 Express One Zone, Not Quite What I Hoped For, https://jack-vanlightly.com/blog/2023/11/29/s3-express-one-zone-not-quite-what-i-hoped-for
 
 [2]. Mantle: Efficient Hierarchical Metadata Management for Cloud Object Storage Services. SOSP 2025.
+
+[3]. Amazon S3 Express One Zone now supports renaming objects within a directory bucket, https://aws.amazon.com/about-aws/whats-new/2025/06/amazon-s3-express-one-zone-renaming-objects-directory-bucket/
+
+[4]. Google Cloud Storage hierarchical namespace, https://cloud.google.com/blog/products/storage-data-transfer/new-gcs-hierarchical-namespace-for-ai-and-data-lake-workloads
 
