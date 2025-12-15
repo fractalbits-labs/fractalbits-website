@@ -50,7 +50,7 @@ Existing systems struggle with these patterns in predictable ways:
 
 ## Introducing FractalBits
 
-We built FractalBits to break out of the high-performance trap: delivering performance you can actually afford to use at scale. In our benchmarks, we achieved nearly 1M GET/s on 4KB objects with a cluster totaling 64 cores across all data and metadata nodes.
+We built FractalBits to break out of the high-performance trap: delivering performance you can actually afford to use at scale. In our benchmarks, we achieved nearly 1M GET/s with p99 ~5ms on 4KB objects with a cluster totaling 64 cores across all data and metadata nodes. See more details in our GitHub repo README.
 
 Our focus:
 
@@ -125,6 +125,8 @@ Hitting the performance or cost wall with your current object storage? We'd be i
 
 [GitHub](https://github.com/fractalbits-labs/fractalbits-main)
 
+[Hackernews Discussion](https://news.ycombinator.com/item?id=46254087)
+
 ---
 
 **References:**
@@ -133,7 +135,7 @@ Hitting the performance or cost wall with your current object storage? We'd be i
 
 [2]. Mantle: Efficient Hierarchical Metadata Management for Cloud Object Storage Services. SOSP 2025.
 
-[3]. Amazon S3 Express One Zone now supports renaming objects within a directory bucket, https://aws.amazon.com/about-aws/whats-new/2025/06/amazon-s3-express-one-zone-renaming-objects-directory-bucket/
+[3]. Amazon S3 Express One Zone now supports renaming objects within a directory bucket, https://aws.amazon.com/about-aws/whats-new/2025/06/amazon-s3-express-one-zone-atomic-renaming-objects-api/
 
-[4]. Google Cloud Storage hierarchical namespace, https://cloud.google.com/blog/products/storage-data-transfer/new-gcs-hierarchical-namespace-for-ai-and-data-lake-workloads
+[4]. Google Cloud Storage hierarchical namespace, https://cloud.google.com/blog/products/storage-data-transfer/cloud-storage-hierarchical-namespace-improves-aiml-checkpointing
 
