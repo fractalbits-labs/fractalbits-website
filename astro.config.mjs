@@ -4,7 +4,16 @@ import tailwind from '@astrojs/tailwind';
 
 export default defineConfig({
   site: 'https://www.fractalbits.com',
+  redirects: {
+    '/blog/we-moved-object-storage-metadata-off-lsm-trees/':
+      '/blog/metadata-engine-for-our-object-storage-from-lsm-tree-to-fractal-art/',
+  },
   integrations: [mdx(), tailwind()],
+  markdown: {
+    shikiConfig: {
+      theme: 'github-light',
+    },
+  },
   output: 'static',
   server: {
     host: '0.0.0.0',

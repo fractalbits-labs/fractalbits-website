@@ -76,7 +76,8 @@
 }
 
 .prose pre {
-  @apply bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto mb-6;
+  background-color: #f5f5f0 !important;
+  @apply text-gray-800 p-4 rounded-lg overflow-x-auto mb-6;
 }
 
 .prose pre code {

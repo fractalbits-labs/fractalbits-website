@@ -1,0 +1,199 @@
+---
+title: "Metadata engine for our Object Storage : from LSM Tree to Fractal ART"
+description: "Why we replaced RocksDB with Fractal ART, an on-disk adaptive radix tree for object storage metadata."
+pubDate: 2026-01-31
+author: "FractalBits Team"
+tags: ["engineering", "performance", "metadata", "lsm-tree", "radix-tree", "fractal-art"]
+---
+
+When we started building FractalBits[^1] object storage, we assumed we'd use RocksDB for metadata engine like everyone else. But as we prototyped, we kept hitting the same friction: [LSM](https://en.wikipedia.org/wiki/Log-structured_merge-tree) engines do not natively model hierarchical structure in keys -- comparisons are lexicographic byte-wise, regardless of semantic boundaries like path separators. While RocksDB supports prefix extractors and custom comparators, these are fundamentally advisory optimizations; the core data structure still reasons about keys as flat byte sequences. Object paths like `/bucket/datasets/2024/train/batch_001.parquet` have rich hierarchical structure that these engines can't exploit. The mismatch creates real problems -- redundant prefix comparisons, costly directory renames, multi-hop path resolution.
+
+This post explains why we abandoned the LSM approach for metadata and built [Fractal ART (Adaptive Radix Tree)](#our-approach-fractal-art) -- an on-disk radix tree that splits data along path boundaries. The result: O(path_length) lookups instead of the repeated prefix comparisons inherent in binary searches (O(path_length * log N)), atomic directory renames via single pointer updates, and no directory contention under concurrent writes. We'll also cover what we gave up by going custom, because every design has tradeoffs.
+
+---
+
+## The Metadata Landscape Today
+
+Most (object) storage systems fall into one of these categories for metadata:
+
+**LSM-backed key-value stores.** The dominant approach. Apache Cassandra, CockroachDB, TiDB, Ozone, and Ceph (BlueStore) all use RocksDB or similar LSM engines under the hood. [SeaweedFS](https://github.com/seaweedfs/seaweedfs) defaults to LevelDB for its filer metadata, though it supports pluggable backends (Redis, Postgres, MySQL, etc.). The LSM approach is battle-tested, and RocksDB does offer [prefix seek](https://github.com/facebook/rocksdb/wiki/Prefix-Seek) to skip irrelevant SSTables during prefix range scans. But these are advisory optimizations -- the core data structure still reasons about keys as flat byte sequences, and the hierarchical structure of paths isn't something the engine can exploit for comparisons, renames, or locality.
+
+**External databases.** Some newer systems offload metadata entirely -- 3FS and Tigris Data use FoundationDB, avoiding the need to build a metadata engine at all. This trades one set of problems (building a metadata layer) for another (depending on an external system's availability, performance characteristics, and operational complexity). It's also worth noting that FoundationDB itself is a sorted key-value store -- it still treats keys as flat byte sequences, so the redundant prefix comparison problem described in this post applies at the storage node level. You're outsourcing metadata management, not solving the structural mismatch.
+
+**Local filesystem.** MinIO [stores metadata as `xl.meta` files directly on the local filesystem](https://blog.min.io/minio-versioning-metadata-deep-dive/), and [NVIDIA AIStore](https://github.com/NVIDIA/aistore/blob/main/docs/overview.md) takes a similar approach using filesystem extended attributes (xattrs) per object. This is elegant in its simplicity, but ties metadata performance to filesystem behavior: listing operations become expensive directory traversals, there's no way to separate metadata onto faster storage tiers, and on many filesystems, having millions of files in one directory [can degrade listing performance](https://github.com/minio/minio/issues/10733) -- because MinIO and NVIDIA AIStore map S3 object prefixes into filesystem structures, extreme flat layouts can hit those same limitations.
+
+We also considered B+ trees[^2], but the same core problem applies -- directory renames still require rewriting all affected keys, and prefix compression doesn't eliminate redundant comparisons during lookups.
+
+---
+
+## Two Ways to Index Object Paths (Both Problematic)
+
+### Full-Path Keys
+
+The simplest model: store `/bucket/images/2024/photo.jpg` as a flat key in the KV store.
+
+```
+Key                           -> Value (metadata + data location)
+/bucket/images/2024/photo.jpg -> {size: 2MB, etag: "abc123", ...}
+/bucket/images/2024/video.mp4 -> {size: 50MB, etag: "def456", ...}
+/bucket/images/2025/doc.pdf   -> {size: 1MB, etag: "ghi789", ...}
+```
+
+This is the approach [GFS](https://research.google.com/archive/gfs-sosp2003.pdf) originally took -- a single in-memory lookup table mapping full pathnames to metadata on the master, with no inodes or per-directory structures. It worked until it didn't: the single master's memory became the bottleneck at petabyte scale, which led Google to replace it with Colossus (backed by Bigtable). [CalvinFS](https://www.usenix.org/system/files/conference/fast15/fast15-paper-thomson.pdf) also uses full-path keys. It's simple -- one lookup per object -- but has two structural problems in LSM trees:
+
+1. **Redundant prefix comparisons.** Looking up `/bucket/images/2024/photo.jpg` means comparing it byte-by-byte against `/bucket/images/2024/video.mp4`, re-processing the shared `/bucket/images/2024/` prefix on every comparison. Across a binary search through thousands of keys, that's a lot of wasted CPU on the same bytes. Prefix compression helps on disk, but doesn't reduce comparison cost.
+
+2. **Costly directory renames.** Renaming `/bucket/images/` to `/bucket/photos/` means rewriting every descendant key -- potentially millions of deletes and inserts. You can batch these writes, but atomically renaming a large subtree with crash consistency (no temporary duplication, no partial visibility) requires complex coordination that turns what should be a metadata operation into an O(n) rewrite. CalvinFS, which uses full-pathname hashing, does support directory renames, but each rename is a distributed transaction that must update metadata for every descendant, making it inherently expensive for large subtrees.
+
+### Inode-Like (Node-Based) Keys
+
+The filesystem-inspired alternative: assign unique IDs (inodes) to directories and files, with parent-child relationships maintaining the hierarchy.
+
+```
+Inode Table:
+inode=1 (dir)  : name="bucket",    parent=0,  children=[2]
+inode=2 (dir)  : name="images",    parent=1,  children=[3,4]
+inode=3 (dir)  : name="2024",      parent=2,  children=[5,6]
+inode=5 (file) : name="photo.jpg", parent=3,  data_loc=...
+```
+
+This enables natural directory operations and supports renames -- but creates three problems that are particularly painful on distributed KV stores:
+
+**Multi-hop path resolution.** Resolving `/bucket/images/2024/photo.jpg` requires four sequential KV lookups -- one per path component. In a distributed system, that's four network round-trips before you can serve a single GET. JuiceFS, which uses Redis or TiKV for inode-based metadata, faces this exact tradeoff.
+
+**Distributed transactions for mutations.** Creating a file requires atomically updating both the new file's inode and the parent directory's child list. If those land on different shards, you are now running a distributed transaction for every single object PUT -- with all the coordination overhead and failure complexity that entails.
+
+**Directory contention.** When thousands of ML training workers write checkpoint files to `/bucket/checkpoints/`, they all contend for the same directory inode. The parent directory becomes a serialization point, limiting write throughput regardless of how many storage nodes you have.
+
+---
+
+## Our Approach: Fractal ART
+
+Fractal ART is an on-disk radix tree that stores full paths as keys -- like the full-path LSM approach -- but uses the tree structure to eliminate redundant prefix processing and enable atomic renames.
+
+It builds on the [Adaptive Radix Tree (ART)](https://db.in.tum.de/~leis/papers/ART.pdf), originally designed for memory-efficient in-memory indexing. ART uses four adaptive node sizes (4, 16, 48, 256 children) to balance memory efficiency with lookup speed, including SIMD-accelerated search for mid-size nodes.
+
+### The Key Idea: Path-Based Blob Splitting
+
+Instead of storing the tree as individual key-value pairs, we serialize subtrees into disk-resident **blobs**. Blobs split adaptively based on size: small subtrees stay inline in their parent blob, while large subtrees get their own blob with a reference (BLOB_REF) in the parent.
+
+```
+Blob Layout (physical):
+
++--------------------------------------------------------------+
+| BLOB 1: Root blob                                            |
+|                                                              |
+| (root) -- /bucket/ -+- images/ --> [BLOB_REF: blob_2]        |
+|                     |                                        |
+|                     +- docs/  ---> report.pdf -> [metadata]  |
+|                     |                                        |
+|                     +- logs/  ---> app.log ----> [metadata]  |
+|                                                              |
+|  docs/ and logs/ are small, so they stay in root blob        |
+|  images/ is large, so it splits into its own blob            |
++--------------------------------------------------------------+
+
++--------------------------------------------------------------+
+| BLOB 2: /bucket/images/ subtree                              |
+|                                                              |
+| (root) --+- 2024/ -+- photo1.jpg --> [metadata]              |
+|          |         +- photo2.jpg --> [metadata]              |
+|          |         +- video.mp4 ---> [metadata]              |
+|          |                                                   |
+|          +- 2025/ -+- img001.png --> [metadata]              |
+|                    +- img002.png --> [metadata]              |
++--------------------------------------------------------------+
+```
+
+This blob-based layout is what gives us the advantages over both LSM approaches.
+
+### Advantage 1: No Redundant Prefix Comparisons
+
+In an LSM tree, looking up `/bucket/images/2024/photo.jpg` means comparing the full 35-byte key against O(log n) other keys per level, re-processing `/bucket/images/2024/` each time.
+
+In Fractal ART, the radix tree traverses the path character by character, consuming each prefix once. The lookup reads the root blob, traverses `/bucket/` to `images/`, follows the BLOB_REF to blob_2, then traverses `2024/` to `photo.jpg`. Two blob reads, one pass through the path.
+
+### Advantage 2: Atomic Directory Rename
+
+Renaming `/bucket/old_name/` to `/bucket/new_name/` in a full-path LSM store means rewriting every descendant key -- millions of deletes and inserts. Achieving crash-consistent atomicity (no partial visibility, no temporary duplication, no partial failure) across a distributed KV store adds significant coordination complexity.
+
+In Fractal ART, the entire subtree lives behind a BLOB_REF in the parent blob. Rename is a single operation: update the edge label from `old_name/` to `new_name/` in the parent blob. The subtree blob doesn't change at all. One blob write, fully atomic.
+
+```
+Before:  /bucket/ -- old_name/ --> [BLOB_REF: blob_X]
+After:   /bucket/ -- new_name/ --> [BLOB_REF: blob_X]  (same blob!)
+```
+
+### Advantage 3: No Directory Contention
+
+In the inode model, every file creation is a distributed transaction if inode and parent are in different nodes: it must atomically allocate the new file's inode *and* append to the parent directory's child list. When `/bucket/uploads/` gets hot with 10K writes/sec, all of those transactions contend for the same parent directory entry. The parent inode becomes a write lock bottleneck -- serializing throughput regardless of how many storage nodes sit behind it.
+
+In Fractal ART, as a blob grows large, it splits at a natural path boundary into independent child blobs. For example, the `uploads/` subtree might split alphabetically:
+
+```
+Before (single blob):
+  uploads/ blob contains: apple.txt, banana.txt, ... zebra.txt
+
+After splitting:
+  uploads/ blob contains:
+    [a-m] --> [BLOB_REF: blob_A]    (apple.txt ... mango.txt)
+    [n-z] --> [BLOB_REF: blob_B]    (nectarine.txt ... zebra.txt)
+```
+
+After splitting, concurrent writes to different key ranges land in different blobs. Each blob is an independent unit of I/O with its own lock scope. Writers to `apple.txt` and `zebra.txt` are mutating completely different blobs on disk, so they never contend for the same lock. The tree self-balances: as any range gets hotter, it splits further, distributing contention automatically.
+
+It's worth noting that full-path LSM stores don't have this directory contention problem per se -- there's no parent directory entry to serialize on. But they also can't do prefix-scoped operations (listing, renaming, access control) efficiently, because the engine has no concept of path hierarchy. Fractal ART gives you both: hierarchical operations *and* contention-free writes.
+
+### Advantage 4: Fewer I/O Round-Trips
+
+Resolving `/bucket/images/2024/january/photo.jpg` in the inode model requires five sequential KV lookups (one per path component), potentially hitting different servers.
+
+In Fractal ART, blobs are prefix-partitioned -- related paths stay together. The same five-level path might require just two blob reads, because multiple path components are resolved within a single blob. Blob boundaries follow path structure, giving excellent locality.
+
+---
+
+## What We Gave Up
+
+Building a custom on-disk Fractal ART radix tree instead of using RocksDB means accepting real costs:
+
+**Implementation complexity.** RocksDB is ~400K lines of heavily tested C++. Our radix tree implementation is novel, which means novel bugs. We spent significant effort on correctness testing -- property-based tests, crash injection, fuzzing -- that we wouldn't need if we used an off-the-shelf engine.
+
+**Write overhead.** Currently, modifying a blob requires rewriting it entirely. We mitigate this through adaptive splitting, keeping blobs bounded in size. The design also allows for delta-based updates: small changes can be stored as deltas, with full blob rewrites triggered only when accumulated deltas reach a threshold -- similar to LSM compaction, but at blob granularity.
+
+**Crash recovery complexity.** LSM trees get crash recovery almost for free -- the WAL plus immutable SSTables make recovery straightforward. Our blob-based tree needs its own durability guarantees, which adds complexity. We use a write-ahead log with physiological logging for efficiency, but it's more surface area for bugs.
+
+**Ecosystem maturity.** RocksDB has been battle-tested by Facebook, CockroachDB, TiKV, and countless other production systems. Our radix tree has been tested by us. For any team evaluating storage engines, this matters. We're confident in our testing, but we can't claim the same field hours.
+
+These are genuine costs, and for many object storage systems -- particularly those without directory rename requirements -- RocksDB is the right choice. In our case, the structural advantages have already paid off: a single m7gd.4xlarge namespace server sustains 1M 4K GET ops/sec at p99 latency ~5 ms -- performance that comes directly from the radix tree's single-pass lookups and blob locality. For AI/analytics workloads where directory operations, hot prefixes, and deep paths are common, we believe the engineering investment is well justified.
+
+<a href="https://asciinema.org/a/771692?autoplay=1"><img src="https://asciinema.org/a/771692.svg" alt="fractalbits run with warp s3 benchmark (get_4k, put_4k)" width="100%" /></a>
+
+---
+
+## Summary
+
+| Operation | Full-Path + LSM | Inode + LSM | Fractal ART |
+|-----------|-----------------|-------------|-------------|
+| Point Lookup | Full key comparison per binary search step | Sequential lookup per path component | Single traversal, byte-level indexing |
+| Search Complexity | O(L * log N) per level (L = key length) | O(L) per hop, multiple hops | O(L) single pass (SIMD-accelerated nodes) |
+| Directory Rename | O(n) key rewrites, complex crash semantics | Distributed transaction | Single pointer update (atomic) |
+| List Prefix | Range scan with iterator merging | Multiple lookups, potential contention | Direct child enumeration |
+| Hot Directory | N/A (flat namespace) | All writes serialize on one inode | Splits into independent blobs |
+| Write Overhead | Leveled compaction across SSTables | Compaction + transaction coordination | Blob rewrite (delta optimization possible) |
+| Implementation Cost | Off-the-shelf (RocksDB) | Off-the-shelf + transaction layer | Custom engine |
+
+---
+
+## Conclusion
+
+LSM trees are excellent general-purpose data structures, but they're structurally mismatched for hierarchical path data. Even with prefix extractors and custom comparators, the core engine reasons about keys as flat byte sequences -- it can't exploit the tree structure that's right there in every object path.
+
+Fractal ART exploits that structure. By splitting the radix tree into blobs along path boundaries, we get efficient lookups, atomic renames, and scalable concurrency -- at the cost of building and maintaining a custom storage engine.
+
+We're curious whether others working on metadata systems have explored similar path-aware indexing approaches, or found ways to make LSM-backed stores work better with hierarchical keys. If you've run into these problems (or solved them differently), we'd like to hear about it.
+
+---
+
+[^1]: [FractalBits](https://fractalbits.com) is an S3 compatible high performance object storage in the AI era. See our [previous post](https://fractalbits.com/blog/why-we-built-another-object-storage/) for more background.
+
+[^2]: B+ trees power most databases and support range scans well, but they have the same structural limitation for path data. They store full keys in leaf nodes -- prefix compression (as in WiredTiger and LeanStore) reduces storage but not comparison cost. Their fixed fan-out doesn't align with path hierarchy, making prefix-scoped operations less natural. The decisive factor: renaming a directory prefix still requires rewriting all affected leaf keys, just like LSM-backed full-path stores. That said, B+ trees offer simpler crash recovery (ARIES-style WAL) and decades of production hardening -- a genuine tradeoff we accepted by going with a radix tree.
