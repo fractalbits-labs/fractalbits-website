@@ -30,6 +30,7 @@ const htmlLang = lang === 'zh' ? 'zh-CN' : 'en';
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
@@ -58,5 +59,7 @@ const htmlLang = lang === 'zh' ? 'zh-CN' : 'en';
       <slot />
     </main>
     <Footer lang={lang} />
+    <!-- Cloudflare Web Analytics -->
+    <script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "0f3c87ed112f4939addb6eaccc846222"}'></script>
   </body>
 </html>
