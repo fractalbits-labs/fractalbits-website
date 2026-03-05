@@ -1,5 +1,5 @@
 ---
-title: "Metadata engine for our Object Storage : from LSM Tree to Fractal ART"
+title: "Metadata Engine for Our Object Storage : from LSM Tree to Fractal ART"
 description: "Why we replaced RocksDB with Fractal ART, an on-disk adaptive radix tree for object storage metadata."
 pubDate: 2026-01-31
 author: "FractalBits Team"
@@ -164,7 +164,7 @@ Building a custom on-disk Fractal ART radix tree instead of using RocksDB means 
 
 **Ecosystem maturity.** RocksDB has been battle-tested by Facebook, CockroachDB, TiKV, and countless other production systems. Our radix tree has been tested by us. For any team evaluating storage engines, this matters. We're confident in our testing, but we can't claim the same field hours.
 
-These are genuine costs, and for many object storage systems -- particularly those without directory rename requirements -- RocksDB is the right choice. In our case, the structural advantages have already paid off: a single m7gd.4xlarge namespace server sustains 1M 4K GET ops/sec at p99 latency ~5 ms -- performance that comes directly from the radix tree's single-pass lookups and blob locality. For AI/analytics workloads where directory operations, hot prefixes, and deep paths are common, we believe the engineering investment is well justified.
+These are genuine costs, and for many object storage systems -- particularly those without directory rename requirements -- RocksDB is the right choice. In our case, the structural advantages have already paid off: a single m7gd.4xlarge namespace server sustains 1M 4K S3 GET ops/sec at p99 latency ~5 ms -- performance that comes directly from the radix tree's single-pass lookups and blob locality. For AI/analytics workloads where directory operations, hot prefixes, and deep paths are common, we believe the engineering investment is well justified.
 
 <a href="https://asciinema.org/a/771692?autoplay=1"><img src="https://asciinema.org/a/771692.svg" alt="fractalbits run with warp s3 benchmark (get_4k, put_4k)" width="100%" /></a>
 
