@@ -1,0 +1,189 @@
+---
+title: "Bootstrapping a Storage Cluster with Object Storage Based Workflow & Barriers"
+description: "How FractalBits uses cloud object storage as a bootstrap-time coordination plane to solve the cluster startup chicken-and-egg problem."
+pubDate: 2026-03-31
+author: "FractalBits Team"
+tags: ["engineering", "architecture", "bootstrap", "distributed-systems"]
+---
+
+Distributed systems often have an awkward first-boot problem.
+
+At a glance, cluster startup sounds simple: provision a few machines, start the services, and let them find each other. In practice, that is rarely how it goes. Before the cluster is healthy, something still has to coordinate startup order:
+
+- Which nodes are alive?
+- Has the metadata/control plane initialized yet?
+- Is it safe for data services to format local state?
+- Can followers start, or should they keep waiting?
+
+That is the bootstrap chicken-and-egg problem. You need coordination before the system is fully alive, but the normal coordination machinery is often part of the very system you are still trying to boot.
+
+FractalBits has the same challenge. If you are not already familiar with it, a quick look at the [architecture overview](https://github.com/fractalbits-labs/fractalbits-main/blob/main/docs/internals/ARCHITECTURE.md) may help. The main components referenced in this post are:
+
+- **RSS** (Root Service Server): cluster coordination and leader election
+- **NSS** (Namespace Service Server): metadata management
+- **BSS** (Blob Storage Server): high-performance blob data storage with io_uring
+- **API Server**: S3-compatible HTTP frontend
+
+Bringing those pieces up cleanly requires both global and per-node sequencing.
+
+Some steps are naturally global:
+
+- the initial etcd cluster is formed
+- the root service has published cluster configuration
+- metadata volume-group configuration is ready
+
+Other steps are naturally per-node:
+
+- this machine is up and reachable
+- this NSS node finished formatting
+- this BSS node has local disks prepared
+- this standby node has its mirroring sidecar ready
+
+If these dependencies are not enforced explicitly, you get exactly the kinds of failures that make distributed bootstrap painful:
+
+- followers racing ahead of the leader
+- nodes formatting before cluster-wide configuration exists
+- startup scripts with hidden ordering assumptions
+- "works on one cloud image, fails on another" timing bugs
+
+Most systems solve this with a built-in consensus layer, static seed configuration, a dedicated bootstrap controller, or a pile of first-boot scripts. In FractalBits, we took a different route: we use cloud object storage itself as the bootstrap-time coordination plane.
+
+More specifically, each service writes and waits on stage completion markers in S3 or GCS. That gives us a durable, cross-node barrier system before the rest of the control plane is fully available.
+
+This post explains how that design works, why it has been practical for us and how we plan to evolve it further.
+
+## The FractalBits Approach
+
+FractalBits runs a bootstrap binary on each node. Instead of directly coordinating over SSH or relying on the storage cluster's eventual steady-state control plane, each node interacts with a shared workflow namespace in object storage.
+
+At a high level:
+
+1. A node completes a stage by uploading a JSON marker object.
+2. A node waits for a dependency by polling object existence or listing a prefix.
+3. Global stages use a single object.
+4. Per-node stages use one object per instance.
+
+The code is straightforward:
+
+- [workflow.rs](https://github.com/fractalbits-labs/fractalbits-main/blob/main/infra/fractalbits-bootstrap/src/workflow.rs) implements the barrier layer.
+- [xtask/common/src/stages.rs](https://github.com/fractalbits-labs/fractalbits-main/blob/main/xtask/common/src/stages.rs) defines the stage DAG.
+- Service-specific modules like [root_server.rs](https://github.com/fractalbits-labs/fractalbits-main/blob/main/infra/fractalbits-bootstrap/src/root_server.rs), [nss_server.rs](https://github.com/fractalbits-labs/fractalbits-main/blob/main/infra/fractalbits-bootstrap/src/nss_server.rs), and [bss_server.rs](https://github.com/fractalbits-labs/fractalbits-main/blob/main/infra/fractalbits-bootstrap/src/bss_server.rs) use those barriers to coordinate.
+
+The workflow key layout looks roughly like this:
+
+```text
+workflow/<cluster_id>/stages/00-instances-ready/<instance-id>.json
+workflow/<cluster_id>/stages/10-etcd-nodes-registered/<instance-id>.json
+workflow/<cluster_id>/stages/20-etcd-ready.json
+workflow/<cluster_id>/stages/30-rss-initialized.json
+workflow/<cluster_id>/stages/40-metadata-vg-ready.json
+workflow/<cluster_id>/stages/50-nss-formatted/<instance-id>.json
+workflow/<cluster_id>/stages/60-mirrord-ready/<instance-id>.json
+workflow/<cluster_id>/stages/70-nss-journal-ready/<instance-id>.json
+workflow/<cluster_id>/stages/80-bss-configured/<instance-id>.json
+workflow/<cluster_id>/stages/90-services-ready/<instance-id>.json
+```
+
+Each object contains metadata such as instance id, service type, timestamp, version, and sometimes extra fields like the node IP address.
+
+That extra metadata matters. For example, BSS nodes publish their IPs during `etcd-nodes-registered`, and the bootstrap flow later derives the initial etcd membership from those uploaded markers rather than from a hardcoded list.
+
+## Why Object Storage Works Well Here
+
+Using object storage as a barrier bus sounds odd at first, but for bootstrap it has several attractive properties.
+
+### It exists before the cluster exists
+
+This is the most important property.
+
+Bootstrap cannot depend on the cluster's own metadata or coordination services if those services are exactly what you are trying to bring up. S3/GCS already exist outside the cluster, so they avoid the circular dependency. For on-prem deployment, we will start a FractalBits based S3 service in an all-in-one docker, so that S3 based deployment workflow still works.
+
+### It is durable and inspectable
+
+Barrier state is not hidden inside a process or a transient host-local file. Operators can inspect the workflow prefix directly and see what each node has reported.
+
+That is useful when bootstrap partially succeeds:
+
+- which stage completed?
+- which instance never showed up?
+- which IPs were discovered?
+
+For distributed bring-up, debuggability is not a nice-to-have, and you can simply use common CLI tools for quick debugging.
+
+### It is cross-cloud and simple
+
+The FractalBits code uses the same high-level workflow abstraction across AWS and GCP, with S3 and GCS behind a thin wrapper in [cloud_storage.rs](https://github.com/fractalbits-labs/fractalbits-main/blob/main/xtask/common/src/cloud_storage.rs).
+
+That keeps bootstrap logic mostly cloud-agnostic even though the deployment environment is not.
+
+### It naturally models a stage DAG
+
+The bootstrap process is fundamentally a directed acyclic graph: some stages must complete before others can begin, and some stages are independent and can run in parallel.
+
+Object storage maps cleanly onto this. Each stage is a key prefix. Dependencies are expressed by polling for the existence of upstream markers before writing your own. The stage definitions in [stages.rs](https://github.com/fractalbits-labs/fractalbits-main/blob/main/xtask/common/src/stages.rs) encode the DAG explicitly: each stage declares its dependencies, and the bootstrap binary enforces them at runtime by waiting on the corresponding object keys.
+
+This makes the dependency graph concrete and observable. Instead of implicit ordering buried in script sequencing or process startup timing, the DAG is visible in both the code and the object store. An operator can list the workflow prefix and reconstruct exactly which stages have completed, which are pending, and where the graph is blocked.
+
+It also means adding a new stage is straightforward: define it, declare its dependencies, and the existing barrier machinery handles the rest. The DAG grows without requiring changes to the coordination mechanism itself.
+
+## Compile-Time Safety on Top of the Barrier Model
+
+We recently tightened this design by making stage usage type-safe at compile time.
+
+In [xtask/common/src/stages.rs](https://github.com/fractalbits-labs/fractalbits-main/blob/main/xtask/common/src/stages.rs), stage definitions now produce typed proofs:
+
+- `VerifiedGlobalDep`
+- `VerifiedNodeDep`
+- `VerifiedGlobalStage`
+- `VerifiedNodeStage`
+
+That lets the compiler reject mistakes like:
+
+- waiting for a per-node stage with a global-stage API
+- completing a global stage through a per-node completion path
+- referencing a stage that is not actually a dependency of the current stage
+
+This does not change the runtime architecture. It hardens the orchestration layer against an entire class of bootstrap bugs that otherwise show up only during deployment.
+
+## Failure Handling and Idempotency
+
+A natural question with any bootstrap protocol is: what happens when something goes wrong? A node crashes mid-bootstrap, a marker write fails due to a transient S3 outage, or an instance never comes up at all.
+
+The key design principle here is idempotency. Every stage in the bootstrap flow is written so that re-executing it produces the same result as running it for the first time. If a node crashes after completing stage 50 but before reaching stage 60, restarting the bootstrap binary on that node will re-verify the earlier stages (the markers already exist, so the checks pass immediately) and pick up where it left off. If a marker write fails, the node simply retries. If it had already succeeded before the crash, the re-upload overwrites the same object with the same content, which is a no-op from the cluster's perspective.
+
+This means the recovery model is straightforward: restart the bootstrap process. There is no need to manually clean up partial state, roll back completed stages, or reason about which half-finished operations need to be undone. The object store is append-only during bootstrap, and every write is safe to repeat.
+
+For the case where a node never comes up at all, the other nodes will block at the per-node barrier that requires its marker. That is intentional. Bootstrap does not silently proceed with a degraded cluster. The operator sees exactly which instance is missing by listing the stage prefix, and can decide whether to fix the node or destroy and re-deploy.
+
+## Beyond Bootstrap: Watch and Trigger Semantics
+
+For bootstrap, polling-based barriers work well. The stages are coarse, the frequency is low, and simplicity matters more than latency. But the same model does not naturally extend to use cases that need push-based notification or session-aware coordination.
+
+Standard object storage does not offer native watch streams, ephemeral leases, or "wake me when this key changes" semantics. That is fine for one-shot bootstrap barriers, but it limits the model's reach for things like:
+
+- real-time workflow triggers across distributed agents
+- leader liveness detection with automatic expiry
+- fine-grained task hand-off in multi-agent pipelines
+
+This is where FractalBits as an S3-compatible service becomes interesting beyond just storing data. Because we control the storage engine, we can extend the S3 API surface with watch and trigger primitives built on top of the same object namespace. A workflow stage marker in S3 could trigger downstream agents immediately on write, rather than requiring them to poll. Lease-like semantics could be layered onto object metadata with server-side expiry.
+
+That turns the bootstrap workflow engine into something more general: a durable, inspectable DAG execution substrate backed by an S3-compatible API, usable for multi-agent orchestration, CI/CD pipelines, or any distributed workflow where participants need to coordinate through a shared, observable state plane.
+
+We are not there yet, but the path from "bootstrap barrier bus" to "general-purpose workflow engine" is shorter than it looks when the barrier bus is already your own S3 service.
+
+## The Broader Lesson
+
+Storage systems do not just need a good steady-state architecture. They also need a credible story for the first ten minutes of life.
+
+That early phase is where circular dependencies, hidden assumptions, and ad hoc scripts tend to pile up. Using object storage as a bootstrap barrier plane is our way of making that phase more explicit.
+
+It is not a universal answer. We would not use it for hot-path coordination, and it does not replace consensus or service discovery. But for cluster genesis, it gives us a surprisingly practical combination of durability, simplicity, and visibility. And because FractalBits is itself an S3-compatible service, the same model can grow into a richer workflow engine once the cluster is alive.
+
+## Notes
+
+Current public cloud docs explicitly state strong consistency for the operations this design depends on:
+
+- Google Cloud Storage consistency docs: https://cloud.google.com/storage/docs/consistency.
+- Amazon S3 docs: https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html#ConsistencyModel.
+
+Those guarantees underpin the barrier model described above: polling for marker existence works correctly because reads reflect the latest writes.
