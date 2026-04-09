@@ -12,8 +12,8 @@ const t = useTranslations(lang);
 const navLinks = [
   { href: getLocalizedPath('/', lang), label: t('nav.home'), key: '/' },
   { href: getLocalizedPath('/blog', lang), label: t('nav.blog'), key: '/blog' },
-  { href: 'https://github.com/fractalbits-labs/fractalbits-main/tree/main/docs', label: t('nav.docs'), external: true },
-  { href: 'https://github.com/fractalbits-labs/fractalbits-main', label: t('nav.github'), external: true },
+  { href: 'https://github.com/fractalbits-labs/fractalbits/tree/main/docs', label: t('nav.docs'), external: true },
+  { href: 'https://github.com/fractalbits-labs/fractalbits', label: t('nav.github'), external: true },
 ];
 
 const currentPath = Astro.url.pathname;

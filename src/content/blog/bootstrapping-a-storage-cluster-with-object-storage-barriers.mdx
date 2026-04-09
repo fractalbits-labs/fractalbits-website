@@ -17,7 +17,7 @@ At a glance, cluster startup sounds simple: provision a few machines, start the 
 
 That is the bootstrap chicken-and-egg problem. You need coordination before the system is fully alive, but the normal coordination machinery is often part of the very system you are still trying to boot.
 
-FractalBits has the same challenge. If you are not already familiar with it, a quick look at the [architecture overview](https://github.com/fractalbits-labs/fractalbits-main/blob/main/docs/internals/ARCHITECTURE.md) may help. The main components referenced in this post are:
+FractalBits has the same challenge. If you are not already familiar with it, a quick look at the [architecture overview](https://github.com/fractalbits-labs/fractalbits/blob/main/docs/internals/ARCHITECTURE.md) may help. The main components referenced in this post are:
 
 - **RSS** (Root Service Server): cluster coordination and leader election
 - **NSS** (Namespace Service Server): metadata management
@@ -65,9 +65,9 @@ At a high level:
 
 The code is straightforward:
 
-- [workflow.rs](https://github.com/fractalbits-labs/fractalbits-main/blob/main/infra/fractalbits-bootstrap/src/workflow.rs) implements the barrier layer.
-- [xtask/common/src/stages.rs](https://github.com/fractalbits-labs/fractalbits-main/blob/main/xtask/common/src/stages.rs) defines the stage DAG.
-- Service-specific modules like [root_server.rs](https://github.com/fractalbits-labs/fractalbits-main/blob/main/infra/fractalbits-bootstrap/src/root_server.rs), [nss_server.rs](https://github.com/fractalbits-labs/fractalbits-main/blob/main/infra/fractalbits-bootstrap/src/nss_server.rs), and [bss_server.rs](https://github.com/fractalbits-labs/fractalbits-main/blob/main/infra/fractalbits-bootstrap/src/bss_server.rs) use those barriers to coordinate.
+- [workflow.rs](https://github.com/fractalbits-labs/fractalbits/blob/main/infra/fractalbits-bootstrap/src/workflow.rs) implements the barrier layer.
+- [xtask/common/src/stages.rs](https://github.com/fractalbits-labs/fractalbits/blob/main/xtask/common/src/stages.rs) defines the stage DAG.
+- Service-specific modules like [root_server.rs](https://github.com/fractalbits-labs/fractalbits/blob/main/infra/fractalbits-bootstrap/src/root_server.rs), [nss_server.rs](https://github.com/fractalbits-labs/fractalbits/blob/main/infra/fractalbits-bootstrap/src/nss_server.rs), and [bss_server.rs](https://github.com/fractalbits-labs/fractalbits/blob/main/infra/fractalbits-bootstrap/src/bss_server.rs) use those barriers to coordinate.
 
 The workflow key layout looks roughly like this:
 
@@ -112,7 +112,7 @@ For distributed bring-up, debuggability is not a nice-to-have, and you can simpl
 
 ### It is cross-cloud and simple
 
-The FractalBits code uses the same high-level workflow abstraction across AWS and GCP, with S3 and GCS behind a thin wrapper in [cloud_storage.rs](https://github.com/fractalbits-labs/fractalbits-main/blob/main/xtask/common/src/cloud_storage.rs).
+The FractalBits code uses the same high-level workflow abstraction across AWS and GCP, with S3 and GCS behind a thin wrapper in [cloud_storage.rs](https://github.com/fractalbits-labs/fractalbits/blob/main/xtask/common/src/cloud_storage.rs).
 
 That keeps bootstrap logic mostly cloud-agnostic even though the deployment environment is not.
 
@@ -120,7 +120,7 @@ That keeps bootstrap logic mostly cloud-agnostic even though the deployment envi
 
 The bootstrap process is fundamentally a directed acyclic graph: some stages must complete before others can begin, and some stages are independent and can run in parallel.
 
-Object storage maps cleanly onto this. Each stage is a key prefix. Dependencies are expressed by polling for the existence of upstream markers before writing your own. The stage definitions in [stages.rs](https://github.com/fractalbits-labs/fractalbits-main/blob/main/xtask/common/src/stages.rs) encode the DAG explicitly: each stage declares its dependencies, and the bootstrap binary enforces them at runtime by waiting on the corresponding object keys.
+Object storage maps cleanly onto this. Each stage is a key prefix. Dependencies are expressed by polling for the existence of upstream markers before writing your own. The stage definitions in [stages.rs](https://github.com/fractalbits-labs/fractalbits/blob/main/xtask/common/src/stages.rs) encode the DAG explicitly: each stage declares its dependencies, and the bootstrap binary enforces them at runtime by waiting on the corresponding object keys.
 
 This makes the dependency graph concrete and observable. Instead of implicit ordering buried in script sequencing or process startup timing, the DAG is visible in both the code and the object store. An operator can list the workflow prefix and reconstruct exactly which stages have completed, which are pending, and where the graph is blocked.
 
@@ -130,7 +130,7 @@ It also means adding a new stage is straightforward: define it, declare its depe
 
 We recently tightened this design by making stage usage type-safe at compile time.
 
-In [xtask/common/src/stages.rs](https://github.com/fractalbits-labs/fractalbits-main/blob/main/xtask/common/src/stages.rs), stage definitions now produce typed proofs:
+In [xtask/common/src/stages.rs](https://github.com/fractalbits-labs/fractalbits/blob/main/xtask/common/src/stages.rs), stage definitions now produce typed proofs:
 
 - `VerifiedGlobalDep`
 - `VerifiedNodeDep`

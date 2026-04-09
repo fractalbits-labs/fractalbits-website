@@ -518,7 +518,7 @@ Fractal ART uses this structure. By splitting blobs along path boundaries, we ge
 
 If you're building object storage that needs to handle hierarchical paths at scale, consider path-aware data structures instead of LSM trees.
 
-**Want to see atomic renames in action?** Check out our [atomic rename demo](https://github.com/fractalbits-labs/fractalbits-main/blob/main/crates/fractal-s3/demo/atomic_rename_demo.sh) showing how directory renames work at any scale without rewriting keys.
+**Want to see atomic renames in action?** Check out our [atomic rename demo](https://github.com/fractalbits-labs/fractalbits/blob/main/crates/fractal-s3/demo/atomic_rename_demo.sh) showing how directory renames work at any scale without rewriting keys.
 
 ---
 

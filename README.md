@@ -1,6 +1,6 @@
 # FractalBits Website
 
-Landing page and blog for [FractalBits](https://github.com/fractalbits-labs/fractalbits-main) - High-Performance S3-Compatible Object Storage.
+Landing page and blog for [FractalBits](https://github.com/fractalbits-labs/fractalbits) - High-Performance S3-Compatible Object Storage.
 
 Live at: https://fractalbits.com
 
