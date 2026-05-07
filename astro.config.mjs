@@ -7,6 +7,14 @@ export default defineConfig({
   redirects: {
     '/blog/we-moved-object-storage-metadata-off-lsm-trees/':
       '/blog/metadata-engine-for-our-object-storage-from-lsm-tree-to-fractal-art/',
+    '/blog/to-fsync-or-not':
+      '/blog/remove-fsync/',
+    '/blog/to-fsync-or-not/':
+      '/blog/remove-fsync/',
+    '/zh/blog/to-fsync-or-not':
+      '/zh/blog/remove-fsync/',
+    '/zh/blog/to-fsync-or-not/':
+      '/zh/blog/remove-fsync/',
   },
   integrations: [mdx(), tailwind()],
   markdown: {
