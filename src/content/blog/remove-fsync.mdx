@@ -16,7 +16,7 @@ Let's start with how object stores and databases handle fsync today. MinIO, in b
 
 Getting fsync right is hard. [Jepsen](https://jepsen.io/) has surfaced fsync-related data-loss bugs in distributed systems many times. One recent example is NATS 2.12.1 losing data on the crash-recovery path ([Jepsen NATS 2.12.1 analysis](https://jepsen.io/analyses/nats-2.12.1)).
 
-Correctness aside, fsync is also expensive to call. A single fsync on an SSD typically takes a few hundred microseconds to a couple of milliseconds. Flushing data from the page cache to the device is just one part of that. The unpredictable part is metadata. fsync doesn't just sync the file's data, it syncs every piece of metadata the file depends on: inode, directory entry, extent map, all the way down to the filesystem journal commit. An fsync call that looks like it's only touching a few KB can trigger an order of magnitude more I/O underneath.
+Correctness aside, fsync is also expensive to call. A single fsync on an SSD typically takes a few hundred microseconds to a couple of milliseconds. Flushing data from the page cache to the device is just one part of that. The unpredictable part is metadata. fsync doesn't just sync the file's data, it syncs every piece of metadata the file depends on: inode, extent map, all the way down to the filesystem journal commit. An fsync call that looks like it's only touching a few KB can trigger an order of magnitude more I/O underneath.
 
 Tail latency is even harder to control. Beyond the filesystem journal flush, the actual latency of any given fsync call also depends on concurrent I/O on the same device, the journal's current commit progress, and the SSD's GC activity. Any one of those can push latency several times above the median.
 
@@ -132,20 +132,9 @@ The engine's throughput is 2.4× the buffered+fsync case and 1.6× the O_DIRECT+
 
 A note on fairness: both ext4+fsync configurations only fsync the data file, not the parent directory. POSIX strictly requires a parent-directory fsync to make a newly created file's existence durable. Otherwise the file can disappear after a power loss. So the two control configurations are weaker than strict POSIX durability for newly created files. Adding the parent-directory fsync would only make their latencies worse and widen the gap.
 
-Beyond the synthetic benchmark, end-to-end product testing confirmed the same trend. The previous engine used a MinIO-like approach: one file per object, written via O_DIRECT without fsync. For atomic writes, each PUT writes to a temporary file and then renames it to the target path. Each step (creating the temp file, modifying directory entries, committing the rename) touches filesystem metadata, and the cumulative cost is significant. That is why it ends up slower than the new engine.
-
-**End-to-end PUT 4K**
-
-| Metric      | Old engine | New engine | Change |
-| ----------- | ---------- | ---------- | ------ |
-| obj/s       | 248,545    | 333,308    | +34.1% |
-| Avg latency | 6.6 ms     | 4.4 ms     | -33.3% |
-
-Throughput is up around 34% and average latency is down by about 33%. The result aligns with the synthetic benchmark. The important variables to compare when reproducing the test are the instance type, local NVMe device, kernel version, filesystem mount options, queue depth, object count, warmup, and exact workload command. Test configuration details are in the [fractalbits repository](https://github.com/fractalbits-labs/fractalbits).
-
 ## Known limitations
 
-**Requires a narrow SSD durability contract.** The no-fsync path is only correct when direct-write completion and 4KB atomic journal-commit assumptions hold across power failure. Commodity SSDs, virtual block devices, RAID layers, or unsafe write-back caches can break those assumptions. Those environments need an explicit sync-based fallback.
+**Requires a narrow SSD durability contract.** The no-fsync path is only correct when direct-write completion and 4KB atomic journal-commit assumptions hold across power failure. Commodity SSDs, RAID layers, or unsafe write-back caches can break those assumptions. Those environments need an explicit sync-based fallback.
 
 **Not suited for HDDs.** The optimization assumes SSD random-write performance is good enough. On HDDs, seek dominates, the space-map layout strategy needs a redesign, and O_DIRECT loses much of its advantage.
 
@@ -158,3 +147,5 @@ Throughput is up around 34% and average latency is down by about 33%. The result
 ## Closing
 
 Removing fsync was not a trick; it moved responsibility from the filesystem into our engine and deployment contract. In our high-performance setting, fsync's cost was high enough to justify rebuilding the write path around explicit allocation, journaling, and recovery. The design is narrower than a filesystem or general-purpose database, but for this workload the performance numbers say the trade-off was worth it.
+
+[Hackernews Discussion](https://news.ycombinator.com/item?id=48047280)
