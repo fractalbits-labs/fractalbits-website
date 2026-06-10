@@ -23,13 +23,13 @@ const formattedDate = pubDate.toLocaleDateString(dateLocale, {
 ---
 
 <article class="group">
-  <a href={getLocalizedPath(`/blog/${slug}`, lang)} class="block p-6 bg-white rounded-2xl border border-gray-200 hover:border-primary-300 hover:shadow-lg transition-all duration-300">
-    <div class="flex items-center gap-2 text-sm text-gray-500 mb-3">
+  <a href={getLocalizedPath(`/blog/${slug}`, lang)} class="block p-6 bg-white rounded-xl border border-gray-200 hover:border-primary-300 hover:shadow-sm transition-all duration-200">
+    <div class="flex items-center gap-3 font-mono text-xs uppercase tracking-wider text-gray-500 mb-3">
       <time datetime={pubDate.toISOString()}>{formattedDate}</time>
       {tags && tags.length > 0 && (
         <>
-          <span>|</span>
-          <span>{tags[0]}</span>
+          <span class="text-gray-300">/</span>
+          <span class="text-primary-700">{tags[0]}</span>
         </>
       )}
     </div>

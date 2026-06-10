@@ -8,7 +8,8 @@
   }
 
   body {
-    @apply bg-white text-gray-900;
+    @apply bg-slate-50 text-gray-900 antialiased;
+    font-feature-settings: 'cv11', 'ss01';
   }
 }
 
@@ -23,6 +24,12 @@
 
   .gradient-text {
     @apply bg-gradient-to-r from-primary-600 to-accent-500 bg-clip-text text-transparent;
+  }
+
+  /* Blueprint-style dot grid texture */
+  .bg-dot-grid {
+    background-image: radial-gradient(circle, rgb(100 116 139 / 0.18) 1px, transparent 1px);
+    background-size: 22px 22px;
   }
 }
 
@@ -93,7 +100,7 @@
 }
 
 .prose a {
-  @apply text-blue-600 hover:underline;
+  @apply text-primary-700 hover:underline;
 }
 
 .prose strong {
