@@ -115,7 +115,7 @@ export const ui = {
     "footer.roadmap": "Roadmap",
     "footer.community": "Community",
     "footer.github": "GitHub",
-    "footer.slack": "Slack",
+    "footer.discord": "Discord",
     "footer.discussions": "Discussions",
     "footer.copyright": "FractalBits.",
 
@@ -232,7 +232,7 @@ export const ui = {
     "footer.roadmap": "路线图",
     "footer.community": "社区",
     "footer.github": "GitHub",
-    "footer.slack": "Slack",
+    "footer.discord": "Discord",
     "footer.discussions": "讨论区",
     "footer.copyright": "分形智存",
 
