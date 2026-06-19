@@ -10,29 +10,30 @@ const { lang = defaultLang } = Astro.props;
 const t = useTranslations(lang);
 
 const getMetrics = [
-  { label: t('benchmarks.iops'), value: '982,552' },
-  { label: t('benchmarks.throughput'), value: '3,838 MiB/s' },
-  { label: t('benchmarks.avgLatency'), value: '2.9 ms' },
-  { label: t('benchmarks.p99Latency'), value: '5.3 ms' },
+  { label: t('benchmarks.iops'), value: '1.3M' },
+  { label: t('benchmarks.throughput'), value: '5.2 GiB/s' },
+  { label: t('benchmarks.avgLatency'), value: '1.6 ms' },
+  { label: t('benchmarks.p99Latency'), value: '3.4 ms' },
 ];
 
 const putMetrics = [
-  { label: t('benchmarks.iops'), value: '248,545' },
-  { label: t('benchmarks.throughput'), value: '971 MiB/s' },
-  { label: t('benchmarks.avgLatency'), value: '6.6 ms' },
+  { label: t('benchmarks.iops'), value: '270K' },
+  { label: t('benchmarks.throughput'), value: '1.0 GiB/s' },
+  { label: t('benchmarks.avgLatency'), value: '3.2 ms' },
+  { label: t('benchmarks.p99Latency'), value: '10.9 ms' },
 ];
 
 const config = [
   { label: t('benchmarks.objectSize'), value: '4 KiB' },
-  { label: t('benchmarks.apiServers'), value: '14x c8g.xlarge' },
+  { label: t('benchmarks.apiServers'), value: '18x c8g.xlarge' },
   { label: t('benchmarks.bssNodes'), value: '6x i8g.2xlarge' },
-  { label: t('benchmarks.nssNode'), value: '1x m7gd.4xlarge' },
+  { label: t('benchmarks.nssNode'), value: '1x r7g.4xlarge' },
   { label: t('benchmarks.region'), value: 'us-west-2' },
   { label: t('benchmarks.replication'), value: '3-way data, 6-way metadata' },
 ];
 ---
 
-<section id="benchmarks" class="py-24">
+<section id="benchmarks" class="pt-16 pb-12">
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
     <div class="text-center mb-16">
       <p class="font-mono text-xs font-semibold text-primary-700 uppercase tracking-widest mb-3">
@@ -79,6 +80,8 @@ const config = [
         </div>
       </div>
     </div>
+
+    <p class="text-center text-sm text-gray-500 max-w-2xl mx-auto mb-6">{t('benchmarks.singleNode')}</p>
 
     <!-- Benchmark Config -->
     <div class="bg-white rounded-xl border border-gray-200 p-8">

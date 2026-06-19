@@ -72,20 +72,20 @@ const t = useTranslations(lang);
 <span class="text-slate-100">    --template perf_demo --with-bench</span>
 <span class="text-emerald-400">✓</span> <span class="text-slate-400">cluster deployed in under 5 minutes</span>
 
-<span class="text-slate-500"># benchmark — 4 KiB objects, single bucket</span>
-<span class="text-emerald-400">GET</span>  <span class="text-slate-100">982,552 Obj/s</span>   <span class="text-slate-400">P99 5.3 ms</span>
-<span class="text-sky-400">PUT</span>  <span class="text-slate-100">248,545 Obj/s</span>   <span class="text-slate-400">avg 6.6 ms</span></code></pre>
+<span class="text-slate-500"># benchmark — 4 KiB objects, single bucket, 1 meta node</span>
+<span class="text-emerald-400">GET</span>  <span class="text-slate-100">1.3M Obj/s</span>   <span class="text-slate-400">P99 3.4 ms</span>
+<span class="text-sky-400">PUT</span>  <span class="text-slate-100">270K Obj/s</span>   <span class="text-slate-400">P99 10.9 ms</span></code></pre>
       </div>
     </div>
 
     <!-- Stats -->
     <div class="mt-16 pt-10 border-t border-gray-200 grid grid-cols-3 max-w-3xl gap-4">
       <div>
-        <div class="font-mono text-2xl sm:text-3xl font-semibold text-gray-900">~1M</div>
+        <div class="font-mono text-2xl sm:text-3xl font-semibold text-gray-900">1.3M+</div>
         <div class="mt-1 font-mono text-[11px] uppercase tracking-wider text-gray-500">{t('hero.stat.iops')}</div>
       </div>
       <div>
-        <div class="font-mono text-2xl sm:text-3xl font-semibold text-gray-900">~5ms</div>
+        <div class="font-mono text-2xl sm:text-3xl font-semibold text-gray-900">~3ms</div>
         <div class="mt-1 font-mono text-[11px] uppercase tracking-wider text-gray-500">{t('hero.stat.latency')}</div>
       </div>
       <div>
