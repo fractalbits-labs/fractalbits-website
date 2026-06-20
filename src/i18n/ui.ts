@@ -59,7 +59,7 @@ export const ui = {
       "Deploy to any AWS or GCP region with a single command — running in under 5 minutes.",
     "features.powered": "Powered by",
     "features.rust": "Rust",
-    "features.rust.desc": "API & Control Plane",
+    "features.rust.desc": "Protocol & Control Plane",
     "features.iouring": "io_uring",
     "features.iouring.desc": "Async I/O & Data Plane",
     "features.art": "Fractal ART",
@@ -126,7 +126,7 @@ export const ui = {
     "benchmarks.region": "Region",
     "benchmarks.replication": "Replication",
     "benchmarks.singleNode":
-      "All of the above is served by a single metadata node — a direct measure of the Fractal ART engine's efficiency. Need more? Scale out horizontally by adding metadata and data nodes.",
+      "All of the above is served by a single metadata node holding hundreds of millions of objects — a direct measure of the Fractal ART engine's efficiency. Need more? Scale out horizontally by adding metadata and data nodes.",
     "benchmarks.cta": "Run your own benchmarks with BYOC",
 
     // Documentation Section
@@ -227,7 +227,7 @@ export const ui = {
       "一条命令部署到任意 AWS 或 GCP 区域——5 分钟内即可运行。",
     "features.powered": "技术栈",
     "features.rust": "Rust",
-    "features.rust.desc": "API 与控制平面",
+    "features.rust.desc": "协议与控制平面",
     "features.iouring": "io_uring",
     "features.iouring.desc": "异步 I/O 与数据平面",
     "features.art": "Fractal ART",
@@ -294,7 +294,7 @@ export const ui = {
     "benchmarks.region": "区域",
     "benchmarks.replication": "复制策略",
     "benchmarks.singleNode":
-      "以上全部由单个元数据节点提供——这正是 Fractal ART 引擎效率的直接体现。需要更高规模？增加元数据与数据节点即可横向扩展。",
+      "以上全部由单个承载数亿对象的元数据节点提供——这正是 Fractal ART 引擎效率的直接体现。需要更高规模？增加元数据与数据节点即可横向扩展。",
     "benchmarks.cta": "使用 BYOC 运行您自己的基准测试",
 
     // Documentation Section
