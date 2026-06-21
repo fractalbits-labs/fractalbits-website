@@ -99,7 +99,7 @@ export const ui = {
     "usecases.metadata.stat2label": "single-pass, real directories",
     "usecases.cost.title": "Cost-Efficient S3 Express Alternative",
     "usecases.cost.problem":
-      "S3 Express One Zone delivers low latency but at high cost, tied to AWS, and often needs EBS.",
+      "S3 Express One Zone delivers low latency, but at high cost and locked to AWS.",
     "usecases.cost.solution":
       "Match or beat that performance at a fraction of the cost — over 100× lower cost per small-object write — deployed into your own AWS or GCP account in minutes, with no EBS.",
     "usecases.cost.stat1": "100×",
@@ -267,7 +267,7 @@ export const ui = {
     "usecases.metadata.stat2label": "单次查找，真实目录",
     "usecases.cost.title": "高性价比的 S3 Express 替代方案",
     "usecases.cost.problem":
-      "S3 Express One Zone 虽延迟低，但成本高、绑定 AWS，且常需依赖 EBS。",
+      "S3 Express One Zone 虽延迟低，但成本高且绑定 AWS。",
     "usecases.cost.solution":
       "以一小部分成本媲美甚至超越其性能——小对象写入成本低 100 倍以上——数分钟内部署到您自己的 AWS 或 GCP 账户，且无需 EBS。",
     "usecases.cost.stat1": "100×",
