@@ -1,0 +1,57 @@
+---
+title: "Object storage is becoming primary storage. Stop benchmarking it only in GB/s."
+description: "As databases, streaming systems, and AI pipelines move their live data onto object storage, GB/s no longer tells you enough. The number that matters is objects per second at a small, stated size."
+pubDate: 2026-06-24
+author: "FractalBits Team"
+tags: ["object-storage", "benchmarking", "performance"]
+---
+
+Object storage used to be the cold tier: backups, logs, the data lake you scanned once in a while. Two things mattered, price per gigabyte and how fast you could read it all back, and nothing that needed to be fast ran on it. That's changing. Databases, streaming systems, and training pipelines now keep their live data in object storage, not just the backup copy. So the usual way of benchmarking it no longer tells you enough.
+
+## What's actually happening
+
+Streaming went first. The "diskless" Kafka systems ([WarpStream](https://www.warpstream.com/), [AutoMQ](https://www.automq.com/blog/rise-of-diskless-kafka-industry-trend-analysis-2026), Aiven Inkless, [StreamNative Ursa](https://streamnative.io/lakestream), and now [KIP-1150](https://factorhouse.io/articles/kip-1150-diskless-topics-explained) in upstream Kafka) write the log straight to S3 instead of copying it across brokers, so the broker's local disk is no longer the source of truth. Confluent [bought WarpStream](https://www.confluent.io/blog/confluent-acquires-warpstream/), which tells you where this is going.
+
+Databases are doing the same. [ClickHouse Cloud](https://aws.amazon.com/blogs/storage/clickhouse-cloud-amazon-s3-express-one-zone-making-a-blazing-fast-analytical-database-even-faster) keeps its primary data in S3. Neon runs Postgres with [its pages on S3](https://neon.com/docs/introduction/architecture-overview). [turbopuffer](https://turbopuffer.com/) built search that lives on object storage, and Cursor and Notion use it. [SlateDB](https://slatedb.io/) is an LSM tree that sits in a bucket. Some now [argue](https://blog.colinbreck.com/operational-benefits-of-databases-built-on-object-storage/) for building the database on object storage from the start.
+
+Then there's AI. A training run reads millions of small files. AWS built [vector storage into S3](https://aws.amazon.com/blogs/aws/introducing-amazon-s3-vectors-first-cloud-storage-with-native-vector-support-at-scale/) for semantic search, RAG, and agent memory, where each vector is a small record and the workload piles up a lot of them. Either way: huge numbers of small operations, exactly what a throughput number hides.
+
+## Why anyone would do this
+
+The appeal is obvious if you've run stateful systems in the cloud. Once the object store holds the durable copy, your compute nodes don't have to keep any state: they start in seconds, die without taking data with them, and you keep one copy instead of moving it around with ETL. It's cheaper too: ClickHouse reports [up to 65% lower TCO](https://aws.amazon.com/blogs/storage/clickhouse-cloud-amazon-s3-express-one-zone-making-a-blazing-fast-analytical-database-even-faster) for the cached data it keeps this way.
+
+What held it back was latency. Object storage is slow, tens to hundreds of milliseconds, fine for a backup but useless when something is waiting on it. The usual fix is a cache: turbopuffer puts an SSD cache in front of S3 because a [cold read is about 870ms versus 14ms warm](https://turbopuffer.com/docs/architecture), but that cache is a whole extra layer to build and run. Or you just live with the latency, like WarpStream's [400 to 600ms p99 writes](https://aws.amazon.com/blogs/storage/how-warpstream-enables-cost-effective-low-latency-streaming-with-amazon-s3-express-one-zone/) on plain S3.
+
+The latency has come down, though. S3 Express One Zone now answers in [single-digit milliseconds](https://docs.aws.amazon.com/AmazonS3/latest/userguide/s3-express-performance.html), and newer object stores go lower still, so "just put it in S3" can work without bolting on a cache. Either way, you're now counting on the object store to be fast.
+
+And when a user is waiting, latency isn't one number per request. A single action turns into many object reads, a query walking index and data blocks, a consumer pulling a run of segments, and it finishes only when the last one comes back. That's where the rare slow reads stop being a footnote. [The Tail at Scale](https://cacm.acm.org/research/the-tail-at-scale/) put numbers on it: say a read is quick almost always, around 10ms, but slow one time in a hundred, a full second. One slow read you'd barely notice. But spread one action across 100 reads and the whole action is slow 63% of the time. A slow case that's rare for a single read is the common case for the request, and a throughput average hides it.
+
+## GB/s measures the easy thing
+
+GB/s became the headline back when object storage was a cold tier and throughput was all it needed to prove. The habit stuck, and not just for object stores. MinIO, an S3-compatible object store, leads with [GiB/s](https://docs.min.io/aistor/operations/benchmarking/); the wider storage-for-AI field does the same, the caching layer Alluxio with [11.5 GiB/s per node](https://www.alluxio.io/news-press/alluxio-closes-strong-q2-with-customer-growth-sub-millisecond-latency-capability-for-ai-data-record-mlperf-storage-v2-0-benchmark-results) and the file system WEKA with [a terabyte a second](https://www.weka.io/blog/ai-ml/ultra-fast-data-platform-thats-redefining-performance-efficiency/).
+
+But throughput is just object rate times object size, so big objects make a big GB/s easy. MinIO's docs run 64 MiB GETs at [3.2 GiB/s](https://docs.min.io/aistor/operations/benchmarking/), which is only 51 objects a second. Hit the same GB/s with 4 KiB objects and you need about 840,000 a second, sixteen thousand times the metadata work behind the same headline.
+
+And small objects aren't a corner case. Some workloads are full of them: a training run reads millions of small files, each one an object, and most buckets fill up with small files anyway, logs, images, JSON, model shards. Other systems try to dodge small objects. They batch writes into bigger objects, or put a cache in front, or add a tier. But each one is a layer you have to build, run, and pay for. And none of them make the small operations go away. They just hide how slow the store would be if you hit it directly. So the real question is simple: how fast is the store at small operations? That tells you how many of those extra layers you really need.
+
+That's why counting bytes and counting requests give different answers. Most of the bytes sit in the biggest objects; most of the requests go to the smallest. So in a bucket with a mix of sizes, a few big objects set the GB/s number, while the small ones make up the work the store actually does. A good GB/s says the disks and network are healthy. It says nothing about finding and placing objects when they're tiny and there are billions of them, which is the whole job of a primary store.
+
+## The metadata path is what's hard
+
+A small GET barely moves any data. The store still has to parse the request, check its SigV4 signature, and look up where the key lives (and on a new connection, do a TLS handshake first) before a few kilobytes come back. For a 4 KiB object, all that per-request work dwarfs the bytes it returns.
+
+This part is measured, not guessed. In a study of S3, [Durner, Leis, and Neumann](https://www.vldb.org/pvldb/vol16/p2769-durner.pdf) found that every request waits about 30ms before any data comes back, no matter the object size. For a 4 KiB object that 30ms is basically the whole cost; the data itself is a rounding error. What limits you is the request, not the byte, and that's exactly what GB/s hides.
+
+Being limited by requests, though, doesn't say which part of the request is the limit. Most of it is easy to scale: parsing and signature checks run on front-end servers that hold no state, so you just add more, and the disk read is only disk speed, so you add disks. The metadata is the part that isn't easy. Finding where a key lives, and keeping that index correct across billions of keys, can't be solved by adding machines. That's the part a store has to engineer for speed and scale, and the part a small-object test against one big bucket actually measures. A GB/s number never touches it.
+
+So the number that separates good object stores from bad ones is objects per second at a small, stated size. The serious benchmarks already report it: [`warp`](https://docs.min.io/enterprise/minio-warp/reference/cli/mixed/) gives per-operation rates with latency percentiles, [MLPerf Storage](https://mlcommons.org/benchmarks/storage/) reports samples per second alongside MB/s, AWS rates Express One Zone in [reads and writes per second](https://docs.aws.amazon.com/AmazonS3/latest/userguide/s3-express-performance.html). Not one leads with GB/s.
+
+## Where GB/s is fine
+
+GB/s is the right number when the work really is big sequential objects: video, backups, table scans, checkpoint writes. And objects per second is gameable too, pick tiny objects, a warm cache, one hot key. So any honest benchmark, whatever the unit, has to state the object sizes, the mix of operations, the number of distinct keys, the durability setting, the concurrency, and the latency percentiles.
+
+## What we built
+
+[FractalBits](https://github.com/fractalbits-labs/fractalbits) is built for exactly this. Its metadata layer is a full-path adaptive radix tree, so it can look up a key directly, without the cross-machine transactions an inode-style design needs. On 4 KiB GETs against one bucket of hundreds of millions of objects, a single `r7g.4xlarge` metadata node serves over 1M objects per second at 3.4ms p99. For a primary store, that's the number that counts: how fast it finds and places objects, not just how many bytes it pushes.
+
+Object storage is becoming where systems keep their primary data — the streaming logs, the database pages, the vectors behind RAG and AI agents that read and write memory a small record at a time — because splitting storage from compute is cheaper and simpler to run. Once you do, the bottleneck is finding and placing objects, not moving bytes. So benchmark that: report objects per second at a small object size, with the sizes, mix, and concurrency, and keep GB/s for the workloads that really are about bandwidth.
